@@ -1,0 +1,25 @@
+# env file
+.env
+
+# keys
+*.key
+*.pub
+project-45267852-1c84-4327-ba7-5aa45bdcc1fd.json
+
+
+# Python / Environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.pytest_cache/
+
+# OS Files
+.DS_Store
+
+# Logs and Uploads
+logs/
+server_uploads/
+*.log

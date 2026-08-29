@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: async_bot_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Inject Docker socket so sandbox can spawn containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist user uploads across container restarts
+      - ./server_uploads:/app/app/uploads
+      # GCP Service Account key for Vertex AI
+      - ./project-45267852-1c84-4327-ba7-5aa45bdcc1fd.json:/app/gcp-key.json:ro
+      # Bot errors log mapping
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+networks:
+  bot_network:
+    driver: bridge
