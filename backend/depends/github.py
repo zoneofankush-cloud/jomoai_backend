@@ -80,7 +80,7 @@ async def github_callback(request: Request):
 
     await register_token(TokenData(mcp_name="github", token=access_token), user_id=stored_user_id)
 
-    return RedirectResponse("http://localhost:5173/settings/integrations?connected=github")
+    return RedirectResponse("https://jomoai.pages.dev/settings/integrations?connected=github")
 
 # CREATE TABLE oauth_state (
 #     state TEXT PRIMARY KEY,

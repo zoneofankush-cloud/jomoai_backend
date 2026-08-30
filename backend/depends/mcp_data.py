@@ -10,7 +10,7 @@ from security.crypto_utils import encrypt_value, decrypt_value
 
 router = APIRouter()
 
-ALLOWED_PROVIDERS = {"github"}
+ALLOWED_PROVIDERS = {"github", "context7"}  # Add more providers as needed
 
 class TokenData(BaseModel):
     mcp_name: str

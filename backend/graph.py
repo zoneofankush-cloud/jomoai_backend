@@ -91,6 +91,7 @@ async def tools_node(state: MessagesState, config: RunnableConfig):
 # ===== NEW: MCP provider keywords bhi ab config-driven, naya provider add karna ek line hi hai =====
 MCP_KEYWORDS = {
     "github": ["github", "repo", "git", "copilot"],
+    "context7": ["context7", "context", "search", "code"]
 }
 
 # ===== CHANGED: sync se async, user_id param add =====

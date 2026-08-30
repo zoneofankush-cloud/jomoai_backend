@@ -18,6 +18,10 @@ PROVIDER_CONFIGS = {
         "transport": "streamable_http",
         "tools": "get_me,search_repositories,get_file_contents,list_issues,list_pull_requests,get_commit"
     },
+    "context7": {
+            "transport": "streamable_http",
+            "url": "https://mcp.context7.com/mcp",
+        }
 }
 
 async def get_mcp_tools(mcp_name: str, access_token: str):
