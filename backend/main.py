@@ -37,6 +37,7 @@ from security.otp import generate_otp, build_email, create_row, update_row, dele
 from backend.depends.github import router as github_router
 from backend.depends.mcp_data import router as mcp_router
 from backend.depends.context7 import router as context7_router
+from outh.gmail_auth import router as gmail_router
 
 #=================================================================
 #=======================  Module Imports =========================
@@ -94,6 +95,7 @@ app.add_middleware(
 app.include_router(github_router)
 app.include_router(mcp_router)
 app.include_router(context7_router)
+app.include_router(gmail_router)
 
 #=================================================================
 #========================  JWT Module ============================
