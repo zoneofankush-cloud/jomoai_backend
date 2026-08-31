@@ -29,7 +29,7 @@ from model.gemini import jomoai
 from backend.user.data import get_user_info
 from backend.user.user import email_exists, password_fetcher, fetch_id, check_ownership
 from security.jwt import delete_jwt_record, insert_jwt_record, verify_jwt_record, get_jwt_token, get_current_user
-from security.otp import generate_otp, build_email, create_row, update_row, delete_row, otp_status, time_remaining
+from security.otp import generate_otp, build_email, create_row, update_row, delete_row, otp_status, time_remaining, send_email_async
 
 
 #=================================================================
@@ -512,17 +512,9 @@ async def Send_Email(email: EmailFormat) -> dict:
         
     await delete_row(email.id)
     otp = generate_otp()
-    subject, content = build_email(otp)
-    msg = EmailMessage()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = email.id
-    msg['Subject'] = subject
-    msg.set_content(content)
-
+    subject, content, html_content = build_email(otp)
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(SENDER_EMAIL, PASS_KEY) # type: ignore
-            smtp.send_message(msg)
+        await send_email_async(recipient_email=email.id, subject=subject, content=content, html_content=html_content)
     except Exception as e:
         return {'status': f"can not authenticate with email otp right now, error: {str(e)}"}
 
@@ -544,17 +536,9 @@ async def Send_Email_to_registered_user(email: EmailFormat) -> dict:
         
     await delete_row(email.id)
     otp = generate_otp()
-    subject, content = build_email(otp)
-    msg = EmailMessage()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = email.id
-    msg['Subject'] = subject
-    msg.set_content(content)
-
+    subject, content, html_content = build_email(otp)
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(str(SENDER_EMAIL), str(PASS_KEY))
-            smtp.send_message(msg)
+        await send_email_async(recipient_email=email.id, subject=subject, content=content, html_content=html_content)
     except Exception as e:
         return {'status': f"can not authenticate with email otp right now, error: {str(e)}"}
 
