@@ -112,7 +112,7 @@ async def gmail_callback(request: Request):
     # Case 1: dono exist hain — direct login
     if gmail and await email_exists(email):
         token = await get_jwt_token(existing_user_id)
-        return RedirectResponse(f"https://jomoai.pages.dev?token={token}")
+        return RedirectResponse(f"https://jomoai.pages.dev?token={token}&email={email}")
 
     # Case 3: gmail_oauth mein link tha, users row orphan/missing —
     # SAME existing_user_id se users row wapas banao, purana data preserve rahega
@@ -124,7 +124,7 @@ async def gmail_callback(request: Request):
                 (existing_user_id, email, placeholder_password),
             )
         token = await get_jwt_token(existing_user_id)
-        return RedirectResponse(f"https://jomoai.pages.dev?token={token}")
+        return RedirectResponse(f"https://jomoai.pages.dev?token={token}&email={email}")
 
     # Case 4: email password-user ke roop mein exist karta hai, gmail abhi link nahi —
     # password touch nahi, sirf link karo
@@ -132,7 +132,7 @@ async def gmail_callback(request: Request):
         existing_user_id = await fetch_id(email)
         await save_gmail_details(email, existing_user_id, access_token)
         token = await get_jwt_token(existing_user_id)
-        return RedirectResponse(f"https://jomoai.pages.dev?token={token}")
+        return RedirectResponse(f"https://jomoai.pages.dev?token={token}&email={email}")
 
     # Case 2: dono nahi exist — bilkul naya user
     placeholder_password = generate_unusable_password_hash()
@@ -143,7 +143,7 @@ async def gmail_callback(request: Request):
         )
     await save_gmail_details(email, new_user_id, access_token)
     token = await get_jwt_token(new_user_id)
-    return RedirectResponse(f"https://jomoai.pages.dev?token={token}")
+    return RedirectResponse(f"https://jomoai.pages.dev?token={token}&email={email}")
 
 
 #=================================================================
