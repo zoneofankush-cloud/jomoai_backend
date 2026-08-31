@@ -15,6 +15,7 @@ COPY tools/ ./tools/
 COPY security/ ./security/
 COPY postgre/ ./postgre/
 COPY model/ ./model/
+COPY outh/ ./outh/
 
 # Expose port and run
 EXPOSE 8000
