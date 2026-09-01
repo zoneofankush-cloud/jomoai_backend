@@ -33,3 +33,4 @@ requests
 youtube_search
 langchain-mcp-adapters
 aiogoogle
+redis

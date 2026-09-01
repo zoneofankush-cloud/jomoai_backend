@@ -16,10 +16,11 @@ BUCKET_NAME=os.getenv("BUCKET_NAME")
 #========================  PATH IMPORTS  =========================
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.graph import graph_state, get_text, chat_heading
 from postgre.connection import memory_saver_state, memory_store_state, async_pool
 from security.crypto_utils import decrypt_value, encrypt_value
+from security.redis_connection import async_redis
 from tools.emails import get_gmail_auth_detail
 from model.gemini import jomoai
 
@@ -29,7 +30,7 @@ from model.gemini import jomoai
 from backend.user.data import get_user_info
 from backend.user.user import email_exists, password_fetcher, fetch_id, check_ownership
 from security.jwt import delete_jwt_record, insert_jwt_record, verify_jwt_record, get_jwt_token, get_current_user
-from security.otp import generate_otp, build_email, create_row, update_row, delete_row, otp_status, time_remaining, send_email_async
+from security.otp import otp_status, router as otp_router
 
 
 #=================================================================
@@ -69,6 +70,7 @@ from email.message import EmailMessage
 async def lifespan(app: FastAPI):
     global workflow
     await async_pool.open()
+    await async_redis.ping()
     checkpointer = await memory_saver_state()
     store = await memory_store_state()
     workflow = await graph_state(checkpointer, store) # type: ignore
@@ -76,9 +78,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    # docs_url=None,
-    # redoc_url=None,
-    # openapi_url=None
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
 )
 
 app.add_middleware(
@@ -96,12 +98,12 @@ app.include_router(github_router)
 app.include_router(mcp_router)
 app.include_router(context7_router)
 app.include_router(gmail_router)
+app.include_router(otp_router)
 
 #=================================================================
 #========================  JWT Module ============================
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
-
 
 async def chat_shape(user_id):
     async with async_pool.connection() as conn:
@@ -328,7 +330,6 @@ class New_Password(BaseModel):
 async def register_user(user: User):
     if not await otp_status(user.email):
         return {"status": "First verify your email before proceeding."}
-    await delete_row(user.email)
     password = user.password
     hashed = bcrypt.hashpw(password.encode(), salt=bcrypt.gensalt()).decode()
     if await email_exists(user.email):
@@ -386,7 +387,6 @@ async def login_with_otp(user: UserOtp):
         try:
             user_id = await fetch_id(user.email) 
             token = await get_jwt_token(user_id)  
-            await delete_row(user.email)
             return {"access_token": token, "token_type": "bearer"}
         except HTTPException as e:
             raise e
@@ -397,7 +397,6 @@ async def login_with_otp(user: UserOtp):
 async def change_password(user: User, new_password: New_Password):
     if not await otp_status(user.email):
             return {"status": "First verify your email before proceeding."}
-    await delete_row(user.email)
     email = user.email
     password = user.password
     await login(User(email=email, password=password))
@@ -417,7 +416,6 @@ async def forgot_password(email_id: UserOtp, new_password: New_Password):
             raise HTTPException(status_code=401, detail="Email not exists")
     if not await otp_status(email):
             return {"status": "First verify your email before proceeding."}
-    await delete_row(email)
     new_password_value = new_password.password
     hashed = bcrypt.hashpw(new_password_value.encode(), bcrypt.gensalt()).decode()
     async with async_pool.connection() as conn:
@@ -429,7 +427,6 @@ async def forgot_password(email_id: UserOtp, new_password: New_Password):
 async def delete_user(user: User):
     if not await otp_status(user.email):
             return {"status": "First verify your email before proceeding."}
-    await delete_row(user.email)
     email = user.email
     password = user.password
     await login(User(email=email, password=password))
@@ -499,88 +496,6 @@ async def update_user_profile(user: UserProfile, user_id: str = Depends(get_curr
         return {"error": "Update failed or user not found"}
 
 #=================================================================
-#======================== OTP Authentication =====================
-class EmailFormat(BaseModel):
-    id: EmailStr
-
-@app.post("/send_otp")
-async def Send_Email(email: EmailFormat) -> dict:
-    if await email_exists(email.id):
-        return {"status": "Email already exists"}
-    if await time_remaining(email.id):
-        return {"status": "Please try after some time."}
-        
-    await delete_row(email.id)
-    otp = generate_otp()
-    subject, content, html_content = build_email(otp)
-    try:
-        await send_email_async(recipient_email=email.id, subject=subject, content=content, html_content=html_content)
-    except Exception as e:
-        return {'status': f"can not authenticate with email otp right now, error: {str(e)}"}
-
-    try:
-        await create_row(email.id, otp)
-    except Exception as e:
-        return {'status': f"otp cannot be updated, error: {str(e)}"}
-
-    return {
-        'status': f"Otp sent to your Email {email.id}, otp valid for 5 minutes",  # FIXED: missing f-string add kiya
-    }
-
-@app.post("/send_otp_to_registered_user")
-async def Send_Email_to_registered_user(email: EmailFormat) -> dict:
-    if not await email_exists(email.id):
-            return {"status": "Email not exists"}
-    if await time_remaining(email.id):
-        return {"status": "Please try after some time."}
-        
-    await delete_row(email.id)
-    otp = generate_otp()
-    subject, content, html_content = build_email(otp)
-    try:
-        await send_email_async(recipient_email=email.id, subject=subject, content=content, html_content=html_content)
-    except Exception as e:
-        return {'status': f"can not authenticate with email otp right now, error: {str(e)}"}
-
-    try:
-        await create_row(email.id, otp)
-    except Exception as e:
-        return {'status': f"otp cannot be updated, error: {str(e)}"}
-
-    return {
-        'status': f"Otp sent to your Email {email.id}, otp valid for 5 minutes",  # FIXED: missing f-string add kiya
-    }
-    
-@app.get("/verify_otp")
-async def veryfy_otp(email_id, otp: str):
-    async with async_pool.connection() as conn:
-        cur = await conn.execute(
-            "SELECT * FROM otp_validation WHERE email = %s",
-            (email_id,),
-        )
-        row = await cur.fetchone()
-
-        if row is None:
-            return {'error': 'No OTP record found'}
-
-        if dt.datetime.now() >= row['expiry_time']:
-            await delete_row(email_id)
-            return {'error': 'OTP expired'}
-
-        if row['attempt_count'] > 3:
-            await delete_row(email_id)
-            return False
-
-        if bcrypt.checkpw(otp.encode(), row['encrypted_otp'].encode()):
-            async with async_pool.connection() as conn:
-                await conn.execute("UPDATE otp_validation SET status = %s WHERE email = %s", (True, email_id,),)
-                await conn.commit()
-            return True
-
-        await update_row(email_id)
-        return {'error': 'Invalid OTP'}
-
-#=================================================================
 #======================== Gmail Addition =========================
 class GmailAuth(BaseModel):
     id: EmailStr = Field(..., description="Gmail address of the user", examples=["example@gmail.com"])
@@ -618,7 +533,6 @@ async def gmail_auth_detail(gmail: GmailAuth, user_id: str = Depends(get_current
 async def gmail_auth_detail_re_register(gmail: GmailAuth, user_id: str = Depends(get_current_user)):
     if not await otp_status(gmail.id):
         return {"status": "First verify your email before proceeding."}
-    await delete_row(gmail.id)
     await delete_gmail_data_by_email(gmail.id)
     try:
         hashed = await encrypt_value(gmail.pass_key)
