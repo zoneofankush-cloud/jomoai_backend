@@ -42,7 +42,7 @@ from outh.gmail_auth import router as gmail_router
 
 #=================================================================
 #=======================  Module Imports =========================
-import uuid, jwt, datetime, bcrypt, httpx, shutil, re, aioboto3, asyncio, smtplib, numpy as np
+import json, uuid, jwt, datetime, bcrypt, httpx, shutil, re, aioboto3, asyncio, smtplib, numpy as np
 
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
@@ -164,16 +164,22 @@ async def create_thread(user_id=Depends(get_current_user)):
         async with async_pool.connection() as conn:
             await conn.execute("INSERT INTO threads (thread_id, user_id) VALUES (%s, %s)", (thread_id, user_id))
             await conn.commit() 
+        data = {"thread_id": str(thread_id), "title": None}
+        await async_redis.set(f"ownership:{user_id}{thread_id}", json.dumps(data))
         return {"thread_id": str(thread_id)}
 
 @app.get("/threads")
 async def get_all_threads(user_id = Depends(get_current_user)):
+    thread_list = await async_redis.get(f"thread_list:{user_id}")
+    if thread_list:
+        return Response(content=thread_list, media_type="application/json")
     async with async_pool.connection() as conn:
         cur = await conn.execute("SELECT thread_id, title FROM threads WHERE user_id = %s ORDER BY created_at DESC", (user_id,))
         threads = await cur.fetchall()
-    return [{"id": str(t['thread_id']), "title": t['title'] or "New Conversation"} for t in threads]
+        result = [{"id": str(t['thread_id']), "title": t['title'] or "New Conversation"} for t in threads]
+    await async_redis.set(f"thread_list:{user_id}", json.dumps(result))
+    return result
 
-# FIXED [Issue #2]: Added DELETE /threads endpoint to handle deleting chat threads safely
 @app.delete("/threads")
 async def delete_thread(thread_id: str, user_id = Depends(get_current_user)):
     async with async_pool.connection() as conn:
@@ -181,18 +187,24 @@ async def delete_thread(thread_id: str, user_id = Depends(get_current_user)):
         deleted = await cur.fetchone()
         if not deleted:
             raise HTTPException(status_code=404, detail="Thread not found")
+            
         await conn.commit()
+    
+    await async_redis.delete(f"thread_list:{user_id}")          
+    await async_redis.delete(f"ownership:{user_id}{thread_id}") 
+    await async_redis.hdel(user_id, thread_id)                  
+    
     return {"status": "deleted", "thread_id": thread_id}
 
 
 class PromptValue(BaseModel):
     prompt: str
     timezone: str = "UTC"
-
+    
 @app.post("/response")
 async def response(prompt: PromptValue, thread_id: str, model_version: str, request: Request, user_id=Depends(get_current_user)):
     row = await check_ownership(thread_id, user_id)
-    if row is None:
+    if not row:
         raise HTTPException(status_code=404, detail="Thread not found")
 
     llm = await model_selection(model_version, user_id)
@@ -210,16 +222,19 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
 
     async def stream():
         tokens = 0
+        full_ai_response = ""
         try:
             async for chunk, metadata in workflow.astream(initial_state, config=config, stream_mode="messages"): # type: ignore
                 #==============================================================================
                 #=========================== Proper Text Streaming ============================
                 if metadata.get("langgraph_node") == "chat_node" and chunk.type in ("ai", "AIMessageChunk"): # type: ignore
                     if isinstance(chunk.content, str) and chunk.content: # type: ignore
+                        full_ai_response += chunk.content
                         yield chunk.content # type: ignore
                     elif isinstance(chunk.content, list): # type: ignore
                         text = get_text(chunk.content) # type: ignore
                         if text:
+                            full_ai_response += text
                             yield text
 
                 #==========================================================================
@@ -255,6 +270,8 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
                 clean_msg = "I'm currently experiencing a temporary technical glitch. Please try asking your question again in a moment."
             yield f"\n\n[SYSTEM_ERROR]: {clean_msg}"
         finally:
+            await append_chat_to_redis(user_id, thread_id, prompt.prompt, full_ai_response)
+            
             if tokens > 0:
                 asyncio.create_task(update_daily_tokens(user_id, tokens))
         #==========================================================================
@@ -265,18 +282,33 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
 
     return StreamingResponse(stream(), media_type="text/plain")
 
+from fastapi import Response
+
 @app.get("/history")
 async def history(thread_id: str, user_id=Depends(get_current_user)):
     if not await check_ownership(thread_id, user_id):
-        raise HTTPException(
-            status_code=404, detail="Thread not found")
+        raise HTTPException(status_code=404, detail="Thread not found")
+    ram_history = await async_redis.hget(user_id, thread_id)
+    if ram_history:
+        return Response(content=ram_history, media_type="application/json")
     config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
     state_history = [state async for state in workflow.aget_state_history(config=config)] # type: ignore
     if not state_history:
-        return []
+        return [] 
     messages = state_history[0].values.get("messages", [])
-    return [{message.type: get_text(message.content)} for message in messages if message.type in {"human", "ai"} and get_text(message.content)]
+    history_data = [{message.type: get_text(message.content)} for message in messages if message.type in {"human", "ai"} and get_text(message.content)]
+    await async_redis.hset(user_id, thread_id, json.dumps(history_data))
+    return history_data
 
+async def append_chat_to_redis(user_id: str, thread_id: str, prompt: str, ai_response: str):
+    ram_history = await async_redis.hget(user_id, thread_id)    
+    if ram_history:
+        history_list = json.loads(ram_history)
+    else:
+        history_list = []
+    history_list.append({"human": prompt})
+    history_list.append({"ai": ai_response})
+    await async_redis.hset(user_id, thread_id, json.dumps(history_list))
 #================================================================
 #========================  User Auth ============================
 class User(BaseModel):
