@@ -10,6 +10,7 @@ load_dotenv()
 from security.jwt import verify_query_token
 from backend.depends.mcp_data import register_token, TokenData
 from postgre.connection import async_pool
+from security.redis_connection import async_redis
 
 #=================================================================
 #=======================  Module Imports =========================
@@ -25,11 +26,12 @@ STATE_TTL_SECONDS = 600
 @router.get("/github/login")
 async def github_login(user_id: str = Depends(verify_query_token)):
     state = secrets.token_urlsafe(32)
-    async with async_pool.connection() as conn:
-        await conn.execute(
-            "INSERT INTO oauth_state (state, user_id) VALUES (%s, %s)",
-            (state, user_id),
-        )
+    await async_redis.set(f"mcp:github{state}", user_id, ex = STATE_TTL_SECONDS)
+    # async with async_pool.connection() as conn:
+    #     await conn.execute(
+    #         "INSERT INTO oauth_state (state, user_id) VALUES (%s, %s)",
+    #         (state, user_id),
+    #     )
     github_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={CLIENT_ID}&state={state}&scope=repo"
@@ -47,19 +49,24 @@ async def github_callback(request: Request):
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    async with async_pool.connection() as conn:
-        cur = await conn.execute(
-            "DELETE FROM oauth_state WHERE state = %s RETURNING user_id, created_at",
-            (state,),
-        )
-        row = await cur.fetchone()
-
-    if row is None:
+    stored_user_id = await async_redis.get(f"mcp:github{state}")
+    if not stored_user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
+    await async_redis.delete(f"mcp:github{state}")
 
-    stored_user_id, created_at = row["user_id"], row["created_at"]
-    if (dt.datetime.now(dt.timezone.utc) - created_at).total_seconds() > STATE_TTL_SECONDS:
-        raise HTTPException(status_code=400, detail="State expired")
+    # async with async_pool.connection() as conn:
+    #     cur = await conn.execute(
+    #         "DELETE FROM oauth_state WHERE state = %s RETURNING user_id, created_at",
+    #         (state,),
+    #     )
+    #     row = await cur.fetchone()
+
+    # if row is None:
+    #     raise HTTPException(status_code=400, detail="Invalid or expired state")
+
+    # stored_user_id, created_at = row["user_id"], row["created_at"]
+    # if (dt.datetime.now(dt.timezone.utc) - created_at).total_seconds() > STATE_TTL_SECONDS:
+    #     raise HTTPException(status_code=400, detail="State expired")
     
 
     async with httpx.AsyncClient() as client:
@@ -78,7 +85,7 @@ async def github_callback(request: Request):
     if not access_token:
         raise HTTPException(status_code=400, detail="Token exchange failed")
 
-    await register_token(TokenData(mcp_name="github", token=access_token), user_id=stored_user_id)
+    await register_token(TokenData(mcp_name="github", token=access_token), user_id=stored_user_id) # type: ignore
 
     return RedirectResponse("https://jomoai.pages.dev/settings/integrations?connected=github")
 

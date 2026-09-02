@@ -76,6 +76,9 @@ router = APIRouter()
 async def Send_Email(email: EmailFormat) -> dict:
     if await email_exists(email.id): 
         return {"status": "Email already exists"}
+
+    if await async_redis.get(f"login_attempt{email.id}"): 
+        return {"status": "Too Many Request from the Email {Email}, Try after 24 Hr from Your last Attempt"}
         
     if await async_redis.get(f"{email.id}timer"):
         return {"status": "Please try after some time."}
@@ -137,7 +140,8 @@ async def verify_otp(user: EmailFormat1):
     fetched_otp = await async_redis.get(user.id)
     
     if not fetched_otp:
-        return {'error': 'Session Expired or Wrong Otp'}
+        if not fetched_otp:
+            return {'error': 'OTP expired'}
     
     attempts = await async_redis.incr(f"attempt{user.id}")
 
@@ -147,6 +151,12 @@ async def verify_otp(user: EmailFormat1):
     if attempts > 3:
         await async_redis.delete(user.id)
         await async_redis.delete(f"attempt{user.id}")
+        login_attempt = await async_redis.incr(f"wrong_otp{user.id}")
+        if login_attempt == 1:
+            await async_redis.expire(f"wrong_otp{user.id}", 86400)
+        if login_attempt == 3:
+            await async_redis.set(f"login_attempt{user.id}", 1, ex=86400)
+            await async_redis.delete(f"wrong_otp{user.id}")
         return {'error': 'Too many failed attempts. Please try again later.'}
 
     if not bcrypt.checkpw(user.otp.encode(), fetched_otp.encode()): # type: ignore
@@ -158,7 +168,8 @@ async def verify_otp(user: EmailFormat1):
     
     # Status verified mark kar diya
     await async_redis.set(f"{user.id}status", "verified", ex=360)
-    
+    # sahi hone pe delete nhi to bekar ka redis space
+    await async_redis.delete(f"wrong_otp{user.id}")
     return True
 
 

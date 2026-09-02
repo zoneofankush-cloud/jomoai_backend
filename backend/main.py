@@ -496,7 +496,7 @@ async def update_user_profile(user: UserProfile, user_id: str = Depends(get_curr
         return {"error": "Update failed or user not found"}
 
 #=================================================================
-#======================== Gmail Addition =========================
+#================ Gmail App Password Addition ====================
 class GmailAuth(BaseModel):
     id: EmailStr = Field(..., description="Gmail address of the user", examples=["example@gmail.com"])
     pass_key: str = Field(..., description="App password generated for Gmail access", examples=["xdhf nmap bxsa mpvo"])

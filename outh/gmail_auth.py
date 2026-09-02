@@ -3,22 +3,22 @@ import uuid
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-
-from security.jwt import get_jwt_token
-from security.crypto_utils import encrypt_value, decrypt_value
-from backend.user.user import fetch_id, email_exists
 from dotenv import load_dotenv
 import os
 load_dotenv()
 #=================================================================
 #========================  PATH IMPORTS  =========================
+from security.jwt import get_jwt_token
+from security.crypto_utils import encrypt_value, decrypt_value
+from backend.user.user import fetch_id, email_exists
 from postgre.connection import async_pool
+from security.redis_connection import async_redis
 
 #=================================================================
 #=======================  Module Imports =========================
 from fastapi import Request, HTTPException, Depends, APIRouter
 from fastapi.responses import RedirectResponse
-
+import redis.asyncio as redis
 router = APIRouter()
 
 GMAIL_CLIENT_ID = os.environ["GMAIL_CLIENT_ID"]
@@ -33,22 +33,19 @@ def generate_unusable_password_hash() -> str:
     random_secret = secrets.token_urlsafe(32)
     return bcrypt.hashpw(random_secret.encode(), bcrypt.gensalt()).decode()
 
-
 @router.get("/gmail/login")
 async def gmail_login():
-    state = secrets.token_urlsafe(32)
-    async with async_pool.connection() as conn:
-        await conn.execute(
-            "INSERT INTO oauth_state (state, user_id) VALUES (%s, %s)",
-            (state, uuid.uuid4()),
-        )
+    user_state = secrets.token_urlsafe(32)
+
+    # Redis me user state store kar do
+    await async_redis.set(f"gmail:login{user_state}", uuid.uuid4().hex, STATE_TTL_SECONDS)
+        
     gmail_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth"
-        f"?client_id={GMAIL_CLIENT_ID}&state={state}&scope=openid email profile"
+        f"?client_id={GMAIL_CLIENT_ID}&state={user_state}&scope=openid email profile"
         f"&response_type=code&redirect_uri=https://jomoai.duckdns.org/gmail/callback"
     )
     return RedirectResponse(gmail_url)
-
 
 @router.get("/gmail/callback")
 async def gmail_callback(request: Request):
@@ -61,19 +58,12 @@ async def gmail_callback(request: Request):
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    async with async_pool.connection() as conn:
-        cur = await conn.execute(
-            "DELETE FROM oauth_state WHERE state = %s RETURNING user_id, created_at",
-            (state,),
-        )
-        row = await cur.fetchone()
-
-    if row is None:
+    # state se user id nikalo ar state ko verify karo fir delete karo
+    new_user_id = await async_redis.get(f"gmail:login{state}")
+    if not new_user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
-
-    new_user_id, created_at = row["user_id"], row["created_at"]
-    if (dt.datetime.now(dt.timezone.utc) - created_at).total_seconds() > STATE_TTL_SECONDS:
-        raise HTTPException(status_code=400, detail="State expired")
+    
+    await async_redis.delete(f"gmail:login{state}")
 
     async with httpx.AsyncClient() as client:
         response = await client.post(

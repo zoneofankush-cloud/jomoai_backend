@@ -9,6 +9,8 @@ load_dotenv()
 from security.jwt import verify_query_token
 from backend.depends.mcp_data import register_token, TokenData
 from postgre.connection import async_pool
+from security.redis_connection import async_redis
+from security.crypto_utils import encrypt_value, decrypt_value
 
 from fastapi import Request, HTTPException, Depends, APIRouter
 from fastapi.responses import RedirectResponse
@@ -24,11 +26,12 @@ STATE_TTL_SECONDS = 600
 async def context7_login(user_id: str = Depends(verify_query_token)):
     code_challenge = base64.urlsafe_b64encode(hashlib.sha256(VERIFIER.encode()).digest()).decode().rstrip("=")
     state = secrets.token_urlsafe(32)
-    async with async_pool.connection() as conn:
-        await conn.execute(
-            "INSERT INTO oauth_state (state, user_id) VALUES (%s, %s)",
-            (state, user_id),
-        )
+    await async_redis.set(f"mcp:context7{state}", user_id, ex = STATE_TTL_SECONDS)
+    # async with async_pool.connection() as conn:
+    #     await conn.execute(
+    #         "INSERT INTO oauth_state (state, user_id) VALUES (%s, %s)",
+    #         (state, user_id),
+    #     )
     context7_url = (
             f"https://context7.com/api/oauth/authorize"
             f"?response_type=code&client_id={CONTEXT7_CLIENT_ID}"
@@ -49,19 +52,24 @@ async def context7_callback(request: Request):
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    async with async_pool.connection() as conn:
-        cur = await conn.execute(
-            "DELETE FROM oauth_state WHERE state = %s RETURNING user_id, created_at",
-            (state,),
-        )
-        row = await cur.fetchone()
-
-    if row is None:
+    stored_user_id = await async_redis.get(f"mcp:context7{state}")
+    if not stored_user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
+    await async_redis.delete(f"mcp:context7{state}")
 
-    stored_user_id, created_at = row["user_id"], row["created_at"]
-    if (dt.datetime.now(dt.timezone.utc) - created_at).total_seconds() > STATE_TTL_SECONDS:
-        raise HTTPException(status_code=400, detail="State expired")
+    # async with async_pool.connection() as conn:
+    #     cur = await conn.execute(
+    #         "DELETE FROM oauth_state WHERE state = %s RETURNING user_id, created_at",
+    #         (state,),
+    #     )
+    #     row = await cur.fetchone()
+
+    # if row is None:
+    #     raise HTTPException(status_code=400, detail="Invalid or expired state")
+
+    # stored_user_id, created_at = row["user_id"], row["created_at"]
+    # if (dt.datetime.now(dt.timezone.utc) - created_at).total_seconds() > STATE_TTL_SECONDS:
+    #     raise HTTPException(status_code=400, detail="State expired")
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -80,6 +88,6 @@ async def context7_callback(request: Request):
     if not access_token:
         raise HTTPException(status_code=400, detail="Token exchange failed")
 
-    await register_token(TokenData(mcp_name="context7", token=access_token), user_id=stored_user_id)
+    await register_token(TokenData(mcp_name="context7", token=access_token), user_id=stored_user_id) # type: ignore
 
     return RedirectResponse("https://jomoai.pages.dev/settings/integrations?connected=context7")
