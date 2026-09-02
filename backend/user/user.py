@@ -16,7 +16,7 @@ async def check_ownership(thread_id, user_id):
         cur = await conn.execute("SELECT thread_id, title FROM threads WHERE thread_id = %s AND user_id = %s", (thread_id, user_id,),)
         row = await cur.fetchone()
         if row is not None:
-            await async_redis.set(f"ownership:{user_id}{thread_id}", json.dumps(row, default=list))
+            await async_redis.set(f"ownership:{user_id}{thread_id}", json.dumps(row, default=str))
         return row
 
 async def email_exists(email: str) -> bool:
