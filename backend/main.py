@@ -230,25 +230,38 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
         tokens = 0
         full_ai_response = ""
         try:
-            async for chunk, metadata in workflow.astream(initial_state, config=config, stream_mode="messages"): # type: ignore
+            async for event in workflow.astream_events(initial_state, config=config, version="v2"):
+                kind = event["event"]
+                
                 #==============================================================================
                 #=========================== Proper Text Streaming ============================
-                if metadata.get("langgraph_node") == "chat_node" and chunk.type in ("ai", "AIMessageChunk"): # type: ignore
-                    if isinstance(chunk.content, str) and chunk.content: # type: ignore
-                        full_ai_response += chunk.content
-                        yield chunk.content # type: ignore
-                    elif isinstance(chunk.content, list): # type: ignore
-                        text = get_text(chunk.content) # type: ignore
-                        if text:
-                            full_ai_response += text
-                            yield text
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    if chunk.content:
+                        if isinstance(chunk.content, str):
+                            full_ai_response += chunk.content
+                            yield chunk.content
+                        elif isinstance(chunk.content, list):
+                            text = get_text(chunk.content)
+                            if text:
+                                full_ai_response += text
+                                yield text
+                
+                #==============================================================================
+                #=========================== Tool Streaming ===================================
+                elif kind == "on_tool_start":
+                    tool_name = event["name"]
+                    tool_msg = f"\n\n🛠️ *Agent is running: {tool_name}...*\n\n"
+                    full_ai_response += tool_msg
+                    yield tool_msg
 
                 #==========================================================================
                 #=========================== Token Extractions ============================        
-                if model_version == "jomoai":
-                    if getattr(chunk, "usage_metadata", None):
-                        tokens_used = chunk.usage_metadata.get('total_tokens', 0) # type: ignore
-                        tokens += tokens_used
+                elif kind == "on_chat_model_end":
+                    if model_version == "jomoai":
+                        output = event["data"].get("output")
+                        if output and getattr(output, "usage_metadata", None):
+                            tokens += output.usage_metadata.get('total_tokens', 0)
         
         except asyncio.CancelledError:
             pass
