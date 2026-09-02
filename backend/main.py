@@ -161,11 +161,28 @@ async def create_thread(user_id=Depends(get_current_user)):
         return f"You have hit the size or Number of Chats Delete some chats to continue"
     else:
         thread_id = uuid.uuid4()
+        
+        # 1. Naya chat DB me daala
         async with async_pool.connection() as conn:
             await conn.execute("INSERT INTO threads (thread_id, user_id) VALUES (%s, %s)", (thread_id, user_id))
             await conn.commit() 
+            
+        # 2. Ownership permission cache set ki
         data = {"thread_id": str(thread_id), "title": None}
         await async_redis.set(f"ownership:{user_id}{thread_id}", json.dumps(data))
+        
+        # ==========================================================
+        # YAHAN JODA HAI: Cache delete karne ki jagah Naya Chat add kiya
+        # ==========================================================
+        old_list = await async_redis.get(f"thread_list:{user_id}")
+        if old_list:
+            all_threads = json.loads(old_list)
+            # Naye chat ko list me sabse upar (top pe) insert kar do
+            all_threads.insert(0, {"id": str(thread_id), "title": "New Conversation"})
+            # Cache ko wapas update kar do
+            await async_redis.set(f"thread_list:{user_id}", json.dumps(all_threads))
+        # ==========================================================
+
         return {"thread_id": str(thread_id)}
 
 @app.get("/threads")
