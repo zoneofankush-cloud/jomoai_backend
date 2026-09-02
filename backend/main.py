@@ -251,7 +251,7 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
                 #=========================== Tool Streaming ===================================
                 elif kind == "on_tool_start":
                     tool_name = event["name"]
-                    tool_msg = f"\n\n🛠️ *Agent is running: {tool_name}...*\n\n"
+                    tool_msg = f"[Calling Tool: {tool_name}...]\n"
                     full_ai_response += tool_msg
                     yield tool_msg
 
