@@ -144,13 +144,13 @@ async def verify_otp(user: EmailFormat1):
     if attempts == 1:
         await async_redis.expire(f"attempt{user.id}", 300)
 
-    if attempts >= 3:
+    if attempts > 3:
         await async_redis.delete(user.id)
         await async_redis.delete(f"attempt{user.id}")
         return {'error': 'Too many failed attempts. Please try again later.'}
 
     if not bcrypt.checkpw(user.otp.encode(), fetched_otp.encode()): # type: ignore
-        return {'error': f'Invalid Otp more {attempts} attempts left'}
+        return {'error': f'Invalid Otp more {3 - attempts} attempts left'}
 
     # Success hone par otp aur attempts RAM se turant saaf kar diye
     await async_redis.delete(user.id)
