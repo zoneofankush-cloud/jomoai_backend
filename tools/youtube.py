@@ -15,6 +15,7 @@ async def search_youtube(query: str, number: int):
         return result
     except Exception as e:
         return f"Error occurred while searching youtube: {str(e)}"
+    
 
 @tool
 async def youtube_video_transcript(video_id_: str):
