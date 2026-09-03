@@ -77,18 +77,31 @@ async def delete_token(mcp_name: str, user_id: str = Depends(get_current_user)):
 
     try:
         async with async_pool.connection() as conn:
-            cur = await conn.execute(
+            await conn.execute(
                 "DELETE FROM mcp_tokens WHERE user_id = %s AND mcp_name = %s",
                 (user_id, mcp_name),
             )
-            if cur.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Token not found")
             await conn.commit()
         from tools.mcp_clients.basic import clear_mcp_cache
         clear_mcp_cache(user_id, mcp_name)
         return {"message": "Token deleted successfully"}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/connected_mcps")
+async def get_connected_mcps(user_id: str = Depends(get_current_user)):
+    try:
+        async with async_pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT mcp_name FROM mcp_tokens WHERE user_id = %s",
+                (user_id,),
+            )
+            rows = await cur.fetchall()
+            connected = [r["mcp_name"] for r in rows] if rows else []
+            return {"connected": connected}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
