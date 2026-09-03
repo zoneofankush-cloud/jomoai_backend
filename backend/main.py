@@ -237,9 +237,11 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
             ):
                 kind = event["event"]
                 
+                node_name = event.get("metadata", {}).get("langgraph_node", "")
+                
                 #==============================================================================
                 #=========================== Proper Text Streaming ============================
-                if kind == "on_chat_model_stream":
+                if kind == "on_chat_model_stream" and node_name == "chat_node":
                     chunk = event["data"]["chunk"]
                     if chunk.content:
                         if isinstance(chunk.content, str):
@@ -264,7 +266,7 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
 
                 #==========================================================================
                 #=========================== Token Extractions ============================        
-                elif kind == "on_chat_model_end":
+                elif kind == "on_chat_model_end" and node_name == "chat_node":
                     if model_version == "jomoai":
                         output = event["data"].get("output")
                         if output and getattr(output, "usage_metadata", None):
