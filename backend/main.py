@@ -54,7 +54,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, SecretStr
-from typing import Optional
+from typing import Any, Optional, cast
 from enum import Enum
 
 # (If you want advanced Semantic caching later, you can use RedisSemanticCache)
@@ -230,7 +230,11 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
         tokens = 0
         full_ai_response = ""
         try:
-            async for event in workflow.astream_events(initial_state, config=config, version="v2"):
+            async for event in cast(Any, workflow).astream_events(
+                initial_state,
+                config=config,
+                version="v2",
+            ):
                 kind = event["event"]
                 
                 #==============================================================================
@@ -254,6 +258,9 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
                     tool_msg = f"[Calling Tool: {tool_name}...]\n"
                     full_ai_response += tool_msg
                     yield tool_msg
+                    
+                elif kind == "on_tool_end":
+                    pass # We do not need to yield anything for end, the spinner will vanish automatically when new text arrives
 
                 #==========================================================================
                 #=========================== Token Extractions ============================        
@@ -278,8 +285,10 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
                 "error_msg": raw_error,
                 "traceback": traceback.format_exc()
             }
-            with open(log_path, 'a') as f:
-                f.write(json.dumps(error_data) + "\n")
+            def _write_log():
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps(error_data) + "\n")
+            await asyncio.to_thread(_write_log)
             err_str = raw_error.lower()
             if "429" in err_str or "quota" in err_str or "rate limit" in err_str:
                 clean_msg = "Your LLM API provider's quota has been exceeded. Please check your billing details, or switch to Jomo AI in the settings to continue chatting seamlessly!"
@@ -299,7 +308,15 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
             if is_first_message:
                 asyncio.create_task(_generate_title_bg(prompt.prompt, llm, thread_id, user_id))
 
-    return StreamingResponse(stream(), media_type="text/plain")
+    return StreamingResponse(
+        stream(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 from fastapi import Response
 

@@ -15,7 +15,7 @@ async def stock_price(symbol: str):
         return {"error": f"Could not fetch stock price: {str(e)}"}
 
 @tool
-def conversion_factor(base_currency: str, target_currency: str, base_currency_value: float = 1.0):
+async def conversion_factor(base_currency: str, target_currency: str, base_currency_value: float = 1.0):
     """ 
     This function fetches the currency conversion factor between a given base currency and a target currency
     args: 
@@ -24,9 +24,9 @@ def conversion_factor(base_currency: str, target_currency: str, base_currency_va
             target_currency: str,
             base_currency_value: float
     returns: 
-       dict with the conversion factor and the converted value of the given currency
+    dict with the conversion factor and the converted value of the given currency
     """
-    try:
+    def convert():
         url = f"https://open.er-api.com/v6/latest/{base_currency.upper()}"
         response = requests.get(url)
         data   = response.json()
@@ -39,5 +39,9 @@ def conversion_factor(base_currency: str, target_currency: str, base_currency_va
             "conversion_factor":  target,
             "converted_value": base_currency_value * target
         }
+    try:
+        return await asyncio.to_thread(convert)
+
     except Exception as e:
         return f"Error fetching currency conversion, try search tool instead, error: {e}"
+        
