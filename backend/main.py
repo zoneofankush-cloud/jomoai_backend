@@ -297,7 +297,7 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            import os, json, traceback
+            import traceback
             from datetime import datetime
             raw_error = str(e)
             log_path = os.path.join(os.getcwd(), 'logs', 'bot_errors.jsonl')
