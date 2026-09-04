@@ -108,10 +108,19 @@ ALGORITHM = "HS256"
 async def chat_shape(user_id):
     async with async_pool.connection() as conn:
         cur = await conn.execute("""
-SELECT COUNT(DISTINCT t.thread_id) as total_chats, ROUND(SUM(pg_column_size(c.*)) / (1024.0 * 1024.0), 2) AS size_in_mb
-FROM threads t JOIN checkpoints c ON t.thread_id::text = c.thread_id WHERE t.user_id = %s""", (user_id,))
+                    SELECT COUNT(DISTINCT t.thread_id) as total_chats, 
+                    ROUND(SUM(pg_column_size(c.*)) / (1024.0 * 1024.0), 2) AS size_in_mb
+                    FROM threads t 
+                    JOIN checkpoints c 
+                    ON t.thread_id::text = c.thread_id 
+                    WHERE t.user_id = %s""", 
+                    (user_id,))
         row = await cur.fetchone()
-        return (row['total_chats'] or 0), (row['size_in_mb'] or 0) # type: ignore
+        if row:
+            total_chats, size_in_mb = row['total_chats'] or 0, row['size_in_mb'] or 0
+
+        return total_chats, size_in_mb
+        return  # type: ignore
 
 async def inject_title(title, thread_id, user_id):
     async with async_pool.connection() as conn:
@@ -230,13 +239,8 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
         tokens = 0
         full_ai_response = ""
         try:
-            async for event in cast(Any, workflow).astream_events(
-                initial_state,
-                config=config,
-                version="v2",
-            ):
+            async for event in cast(Any, workflow).astream_events(initial_state, config=config, version="v2"):
                 kind = event["event"]
-                
                 node_name = event.get("metadata", {}).get("langgraph_node", "")
                 
                 #==============================================================================
