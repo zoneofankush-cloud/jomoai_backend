@@ -29,5 +29,3 @@ jomoai = ChatGoogleGenerativeAI(
     location="global",
     streaming=True
 )
-
-is chij ko context7 and online acche se verify kar sahi hai

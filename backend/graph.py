@@ -170,7 +170,6 @@ async def chat_node(state: MessagesState, store: BaseStore, config: RunnableConf
     user_id = config['configurable']['user_id'] # type: ignore
     user_location = config['configurable']['location'] # type: ignore
     user_tz = config['configurable']['timezone'] # type: ignore
-    current_time_str = get_local_time(user_tz)
     user_details = ('profile', user_id, 'details')
     user_info = await store.asearch(user_details)
 
@@ -180,7 +179,7 @@ async def chat_node(state: MessagesState, store: BaseStore, config: RunnableConf
         info = ""
     
     sys_config = {"name": "jomoai", "version": 'v-01', "established": "15 August 2026", "trained by": "Ankush Gautam"}
-    sys_msg    = SystemMessage(content=f"{str(sys_config)}\nuser_info: \n{info} \n- current_location: {user_location}\n- current_time: {current_time_str}")
+    sys_msg    = SystemMessage(content=f"{str(sys_config)}\nuser_info: \n{info} \n- current_location: {user_location}")
     #=================================================================
     #========== Sliding Window + Unified Truncation ==================
             
