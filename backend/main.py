@@ -336,15 +336,9 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
             if is_first_message:
                 asyncio.create_task(_generate_title_bg(prompt.prompt, llm, thread_id, user_id))
 
-    return StreamingResponse(
-        stream(), 
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
+    return StreamingResponse(stream(), 
+                             media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
 
 from fastapi import Response
 

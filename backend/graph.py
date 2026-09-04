@@ -177,9 +177,18 @@ async def chat_node(state: MessagesState, store: BaseStore, config: RunnableConf
         info = ''.join([f"\n- {x.key}: {x.value['data']}" for x in user_info])
     else:
         info = ""
+        
+    import datetime
+    import zoneinfo
+    try:
+        tz = zoneinfo.ZoneInfo(user_tz) if user_tz else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+    # Sirf Date bhej rahe hain taaki caching break na ho. Time ke liye 'time_tool' hai.
+    current_date_str = datetime.datetime.now(tz).strftime("%A, %B %d, %Y")
     
     sys_config = {"name": "jomoai", "version": 'v-01', "established": "15 August 2026", "trained by": "Ankush Gautam"}
-    sys_msg    = SystemMessage(content=f"{str(sys_config)}\nuser_info: \n{info} \n- current_location: {user_location}")
+    sys_msg    = SystemMessage(content=f"{str(sys_config)}\nuser_info: \n{info} \n- current_location: {user_location} \n- current_date: {current_date_str}")
     #=================================================================
     #========== Sliding Window + Unified Truncation ==================
             
