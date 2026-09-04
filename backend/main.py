@@ -261,31 +261,20 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
                 #=========================== Tool Streaming ===================================
                 elif kind == "on_tool_start":
                     tool_name = event["name"]
-                    run_id = event.get("run_id", "unknown")
-                    tool_input = event["data"].get("input", {})
-                    try:
-                        input_str = json.dumps(tool_input, ensure_ascii=False)
-                    except Exception:
-                        input_str = str(tool_input)
-                        
-                    tool_payload = json.dumps({"id": run_id, "name": tool_name, "args": input_str})
+                    tool_payload = json.dumps({"name": tool_name})
                     tool_msg = f"\n```tool_call\n{tool_payload}\n```\n"
                     full_ai_response += tool_msg
                     yield tool_msg
                     
                 elif kind == "on_tool_end":
                     tool_name = event["name"]
-                    run_id = event.get("run_id", "unknown")
                     tool_output = event["data"].get("output", "")
-                    try:
-                        output_str = json.dumps(tool_output, ensure_ascii=False)
-                    except Exception:
-                        output_str = str(tool_output)
+                    
+                    clean_text = tool_output.content if hasattr(tool_output, 'content') else str(tool_output)
+                    if isinstance(clean_text, str) and len(clean_text) > 5000:
+                        clean_text = clean_text[:5000] + "\n...[Output truncated for UI performance]"
                         
-                    if len(output_str) > 5000:
-                        output_str = output_str[:5000] + "\n...[Output truncated for UI performance]"
-                        
-                    tool_payload = json.dumps({"id": run_id, "name": tool_name, "result": output_str})
+                    tool_payload = json.dumps({"name": tool_name, "result": clean_text}, ensure_ascii=False)
                     tool_msg = f"\n```tool_result\n{tool_payload}\n```\n"
                     full_ai_response += tool_msg
                     yield tool_msg
@@ -338,7 +327,8 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
 
     return StreamingResponse(stream(), 
                              media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
+                             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+                             )
 
 from fastapi import Response
 
