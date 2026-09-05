@@ -31,10 +31,18 @@ async def search_tool(n: int, query: str):
         n = 5
     try:
         tavily_search = TavilySearch(max_results=n, topic="general", tavily_api_key=TAVILY_API_KEY)
-        return await tavily_search.ainvoke(query)
+        results = await tavily_search.ainvoke(query)
+        return {"JomoAI Search" : {
+        "URL": x["url"],
+        "Title": x["title"],
+        "Content": x["content"],
+        "Raw Content": x["raw_content"],
+    }
+ for x in results["results"]}
     except Exception:
         try:
-            return await DuckDuckGoSearchRun(api_wrapper=DuckDuckGoSearchAPIWrapper(max_results=n)).ainvoke(query)
+            results = await DuckDuckGoSearchRun(api_wrapper=DuckDuckGoSearchAPIWrapper(max_results=n)).ainvoke(query)
+            return {"JomoAI Search" : results.split('...')}
         except Exception:
             return "No results found"
 
