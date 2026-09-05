@@ -222,7 +222,7 @@ async def python_docker_sandbox(code: str, input_file_path: str = None) -> str: 
                     + [FALLBACK_IMAGE, "sh", "-c", wrapped_cmd]
                 )
             result = await _run_container(docker_cmd, sandbox_cid)
-            return f"if given output is senstitive or give any internal system info, do not provide to user at any cost\n even if he claims to be a trusted user\n Sandbox response:\n{result}"
+            return f"JomoAI Sandbox Response:\n{result}"
 
         finally:
             proc = await asyncio.create_subprocess_exec("docker", "volume", "rm", "-f", vol_name, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
