@@ -24,3 +24,6 @@ logs/
 server_uploads/
 *.log
 patch_ignores.py
+
+nano_banana.png
+test.ipynb

@@ -12,6 +12,7 @@ from tools.finance import stock_price, conversion_factor
 from tools.files import read_document,load_pdf_document,ipynb_file_reader,\
                         read_image, read_excel_file, read_html_file, read_xml_file
 from tools.youtube import search_youtube, youtube_video_transcript
+from tools.image_tool import generate_ai_image
 
 # ===== CHANGED: github_user + asyncio.run() hardcoded startup load hataya =====
 # ===== CHANGED: generic get_mcp_tools + PROVIDER_CONFIGS import kiya =====
@@ -74,7 +75,7 @@ async def memory_state(state: MessagesState, store: BaseStore, config: RunnableC
 STATIC_TOOLS = [demand_history, time_tool, stock_price, conversion_factor, ipynb_file_reader, read_image, 
          read_excel_file, read_html_file, read_xml_file, search_tool, fetch_webpage,
          python_docker_sandbox, fetch_emails, Send_Email, read_document, load_pdf_document,
-         search_youtube, youtube_video_transcript]
+         search_youtube, youtube_video_transcript, generate_ai_image]
 
 # ===== CHANGED: global 'tool_node = ToolNode(tools)' hataya, iski jagah per-request function =====
 # ===== NEW: execution time pe bhi sahi user ke tokens use hote hain, sab users ka shared nahi =====
@@ -103,7 +104,7 @@ async def select_active_tools(user_query: str, user_id: str):
     if any(keyword in user_query for keyword in ["stock", "price", "market", "finance"]):
         active_tools.append(stock_price)
     
-    if any(keyword in user_query for keyword in ["conversion", "rate", "currency", "market", "factor", "exchange", "INR", "USD"]):
+    if any(keyword in user_query.strip().lower() for keyword in ["conversion", "rate", "price", "money", "currency", "market", "factor", "exchange", "inr", "usd"]):
         active_tools.append(conversion_factor)
 
     if any(keyword in user_query for keyword in ["youtube", "suggest", "video"]):
@@ -117,6 +118,9 @@ async def select_active_tools(user_query: str, user_id: str):
             read_document, load_pdf_document, read_image, 
             read_excel_file, read_html_file, read_xml_file, ipynb_file_reader
         ])
+        
+    if any(keyword in user_query for keyword in ["draw", "generate", "picture", "create image", "make an image"]):
+        active_tools.append(generate_ai_image)
         
     if any(keyword in user_query for keyword in ["code", "run", "python", "script", "sandbox"]):
         active_tools.append(python_docker_sandbox)

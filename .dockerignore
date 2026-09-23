@@ -22,3 +22,5 @@ env/
 .git/
 Dockerfile
 docker-compose.yml
+nano_banana.png
+test.ipynb
