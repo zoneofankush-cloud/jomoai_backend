@@ -99,7 +99,7 @@ MCP_KEYWORDS = {
 async def select_active_tools(user_query: str, user_id: str):
     user_query = user_query.lower()
     
-    active_tools = [demand_history, time_tool, search_tool, fetch_webpage]
+    active_tools = [demand_history, time_tool, search_tool, fetch_webpage, generate_ai_image]
     
     if any(keyword in user_query for keyword in ["stock", "price", "market", "finance"]):
         active_tools.append(stock_price)
@@ -118,9 +118,6 @@ async def select_active_tools(user_query: str, user_id: str):
             read_document, load_pdf_document, read_image, 
             read_excel_file, read_html_file, read_xml_file, ipynb_file_reader
         ])
-        
-    if any(keyword in user_query for keyword in ["draw", "generate", "picture", "create image", "make an image"]):
-        active_tools.append(generate_ai_image)
         
     if any(keyword in user_query for keyword in ["code", "run", "python", "script", "sandbox"]):
         active_tools.append(python_docker_sandbox)

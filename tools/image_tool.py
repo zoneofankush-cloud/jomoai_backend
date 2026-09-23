@@ -6,7 +6,7 @@ from google import genai
 
 @tool
 async def generate_ai_image(prompt: str, config: RunnableConfig) -> str:
-    """Generate an AI image based on prompt."""
+    """As per user request Generate an AI image with giving prompt as input."""
     user_id = config['configurable']['user_id']
     try:
         # 1. API Call (Pehle API call karo)
