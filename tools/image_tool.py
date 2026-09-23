@@ -8,6 +8,13 @@ from google import genai
 async def generate_ai_image(prompt: str, config: RunnableConfig) -> str:
     """As per user request Generate an AI image with giving prompt as input."""
     user_id = config['configurable']['user_id']
+    model = config['configurable']['model_version']
+
+    if model != 'jomoai':
+        return {
+                    "message": "Image cannot be generated with user's selected Model, shift to JomoAI to generate Image or get JomoAI Pro",
+                    "filename": ""
+                } # type: ignore
     try:
         # 1. API Call (Pehle API call karo)
         client = genai.Client(vertexai=True, project="project-45267852-1c84-4327-ba7", location="global")

@@ -227,7 +227,7 @@ async def response(prompt: PromptValue, thread_id: str, model_version: str, requ
     # Get IP-based Location and Timezone
     user_loc, user_tz = await get_user_info(request, prompt.timezone)
     
-    config = {"configurable": {"thread_id": thread_id, "user_id": user_id, "llm": llm, "timezone": user_tz, "location": user_loc}}
+    config = {"configurable": {"thread_id": thread_id, "user_id": user_id, "llm": llm, "model_version": model_version, "timezone": user_tz, "location": user_loc}}
     initial_state = {"messages": [{"role": "user", "content": prompt.prompt}]}
 
     #==========================================================================
