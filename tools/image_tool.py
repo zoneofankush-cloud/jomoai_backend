@@ -1,4 +1,4 @@
-import uuid, io, os, aioboto3, asyncio
+import uuid, io, os, aioboto3, asyncio # type: ignore
 from typing import Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig

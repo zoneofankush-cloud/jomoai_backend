@@ -20,6 +20,8 @@ async_pool = AsyncConnectionPool(
         conninfo=DBConnection,
         max_size=5,
         min_size=1,
+        max_idle=60,
+        check=AsyncConnectionPool.check_connection,
         kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
         open=False
     )
