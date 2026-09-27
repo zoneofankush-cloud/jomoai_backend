@@ -7,8 +7,8 @@ load_dotenv()
 #=================================================================
 #=======================  Module Imports =========================
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.globals import set_llm_cache
-from langchain_community.cache import AsyncRedisCache
+# from langchain_core.globals import set_llm_cache
+# from langchain_community.cache import AsyncRedisCache
 
 # Tera existing redis connection import kiya
 from security.redis_connection import async_redis
@@ -16,7 +16,7 @@ from security.redis_connection import async_redis
 #=================================================================
 #=======================  CACHE SETUP ============================
 # 1 din (86400s) ka TTL rakha hai taaki purana cache Redis ko full na kare
-set_llm_cache(AsyncRedisCache(redis_=async_redis, ttl=82800))
+# set_llm_cache(AsyncRedisCache(redis_=async_redis, ttl=82800))
 
 #=================================================================
 #=======================  JOMO AI SETUP ==========================
